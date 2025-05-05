@@ -8,10 +8,8 @@ useHead({
   title: 'Список продуктів'
 })
 
-const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
-const UAvatar = resolveComponent('UAvatar')
 
 const table = useTemplateRef('table')
 
@@ -104,108 +102,164 @@ function getHeader(column: Column<any>, label: string) {
   )
 }
 
-const columns: TableColumn<Product>[] = [
-  {
-    accessorKey: 'title',
-    header: ({ column }) => getHeader(column, 'Назва'),
-  },
-  {
-    accessorKey: 'description',
-    header: ({ column }) => getHeader(column, 'Опис'),
-    cell: ({ row }) => {
-      const description = row.getValue('description') as string
-      return description.length > 50 ? `${description.substring(0, 50)}...` : description
-    }
-  },
-  {
-    accessorKey: 'price',
-    header: ({ column }) => getHeader(column, 'Ціна'),
-    cell: ({ row }) => {
-      const price = Number.parseFloat(row.getValue('price'))
-      return h('div', { class: 'text-right font-medium pr-4' }, `$${price}`)
-    }
-  },
-  {
-    accessorKey: 'rating',
-    header: ({ column }) => getHeader(column, 'Оцінка'),
-    cell: ({ row }) => {
-      const rating = Number.parseFloat(row.getValue('rating'))
-      const color = rating >= 4.5 ? 'text-green-500' : 'text-red-500'
-      return h('div', { class: `font-medium ${color} pl-4` }, rating.toFixed(1))
-    }
-  },
-  {
-    accessorKey: 'brand',
-    header: ({ column }) => getHeader(column, 'Бренд'),
-  },
-  {
-    accessorKey: 'category',
-    header: ({ column }) => getHeader(column, 'Категорія'),
-  },
-  {
-    accessorKey: 'thumbnail',
-    header: () => getHeaderWithoutSorting('Фото'),
-    cell: ({ row }) => {
-      const thumbnail = row.getValue('thumbnail') as string
-      return h('img', {
-        src: thumbnail,
-        alt: `${row.getValue('title')} thumbnail`,
-        class: 'w-[100px] h-[100px] object-cover rounded-md' // Розмір 100x100 та обтинання зображення
-      })
-    }
-  },
-]
+const isMobile = ref(false)
+const isTablet = ref(false)
+
+const columns = computed(() => {
+  const baseColumns: TableColumn<Product>[] = [
+    {
+      accessorKey: 'title',
+      header: ({ column }) => getHeader(column, 'Назва'),
+    },
+    {
+      accessorKey: 'price',
+      header: ({ column }) => getHeader(column, 'Ціна'),
+      cell: ({ row }) => {
+        const price = Number.parseFloat(row.getValue('price'))
+        return h('div', { class: 'text-right font-medium pr-2 md:pr-4' }, `$${price}`)
+      }
+    },
+    {
+      accessorKey: 'thumbnail',
+      header: () => getHeaderWithoutSorting('Фото'),
+      cell: ({ row }) => {
+        const thumbnail = row.getValue('thumbnail') as string
+        return h('img', {
+          src: thumbnail,
+          alt: `${row.getValue('title')} thumbnail`,
+          class: 'w-16 h-16 sm:w-20 sm:h-20 md:w-[100px] md:h-[100px] object-cover rounded-md'
+        })
+      }
+    },
+  ]
+
+  if (!isMobile.value) {
+    baseColumns.splice(1, 0, {
+      accessorKey: 'description',
+      header: ({ column }) => getHeader(column, 'Опис'),
+      cell: ({ row }) => {
+        const description = row.getValue('description') as string
+        return description.length > (isTablet.value ? 30 : 50) ?
+            `${description.substring(0, isTablet.value ? 30 : 50)}...` : description
+      }
+    })
+  }
+
+  if (!isMobile.value || !isTablet.value) {
+    baseColumns.splice(isMobile.value ? 2 : 3, 0, {
+      accessorKey: 'rating',
+      header: ({ column }) => getHeader(column, 'Оцінка'),
+      cell: ({ row }) => {
+        const rating = Number.parseFloat(row.getValue('rating'))
+        const color = rating >= 4.5 ? 'text-green-500' : 'text-red-500'
+        return h('div', { class: `font-medium ${color} pl-2 md:pl-4` }, rating.toFixed(1))
+      }
+    })
+  }
+
+  if (!isTablet.value) {
+    baseColumns.push(
+        {
+          accessorKey: 'brand',
+          header: ({ column }) => getHeader(column, 'Бренд'),
+        },
+        {
+          accessorKey: 'category',
+          header: ({ column }) => getHeader(column, 'Категорія'),
+        }
+    )
+  }
+
+  return baseColumns
+})
 
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 10
+  pageSize: isMobile.value ? 5 : 10
 })
 
 const sorting = ref([{
   id: 'title',
   desc: false
 }])
+
+onMounted(() => {
+  checkScreenSize()
+  window.addEventListener('resize', checkScreenSize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkScreenSize)
+})
+
+function checkScreenSize() {
+  isMobile.value = window.innerWidth < 640
+  isTablet.value = window.innerWidth >= 640 && window.innerWidth < 1024
+
+  pagination.value.pageSize = isMobile.value ? 5 : 10
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#2e2e2e] p-8">
-    <div class="mx-auto max-w-7xl">
-      <div class="bg-gray-700 rounded-lg shadow-lg">
-        <div class="mb-4 py-3 flex justify-end">
-          <UInput
-              :model-value="table?.tableApi?.getColumn('title')?.getFilterValue() as string"
-              class="px-4 py-2 min-w-80 me-4 rounded-lg"
-              placeholder="Пошук за назвою"
-              @update:model-value="table?.tableApi?.getColumn('title')?.setFilterValue($event)"
-          />
-        </div>
+  <div class="min-h-screen bg-[#2e2e2e] p-2 sm:p-4 md:p-8">
+    <div class="mb-4 py-2 sm:py-3 w-full">
+      <UInput
+          :model-value="table?.tableApi?.getColumn('title')?.getFilterValue() as string"
+          class="w-full md:max-w-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg"
+          placeholder="Пошук за назвою"
+          @update:model-value="table?.tableApi?.getColumn('title')?.setFilterValue($event)"
+      />
+    </div>
 
-        <UTable
-            ref="table"
-            v-model:pagination="pagination"
-            v-model:sorting="sorting"
-            :columns="columns"
-            :data="products"
-            :loading="status === 'pending'"
-            search-placeholder="Пошук товарів..."
-            :pagination-options="{
-            getPaginationRowModel: getPaginationRowModel()
-          }"
-            sort-mode="all"
-            class="rounded-lg overflow-hidden"
-        />
-      </div>
+    <div class="bg-gray-700 rounded-lg shadow-lg flex flex-col justify-center items-center">
+      <UTable
+          ref="table"
+          v-model:pagination="pagination"
+          v-model:sorting="sorting"
+          :columns="columns"
+          :data="products"
+          :loading="status === 'pending'"
+          search-placeholder="Пошук товарів..."
+          :pagination-options="{
+              getPaginationRowModel: getPaginationRowModel()
+            }"
+          sort-mode="all"
+          class="rounded-lg overflow-hidden w-full"
+          :ui="{
+              wrapper: 'overflow-auto',
+              td: {
+                base: 'whitespace-normal break-words p-1 sm:p-2 md:p-3',
+                padding: 'px-1 sm:px-2 md:px-4 py-1.5 sm:py-2 md:py-4'
+              },
+              th: {
+                base: 'whitespace-nowrap p-1 sm:p-2 md:p-3',
+                padding: 'px-1 sm:px-2 md:px-4 py-1.5 sm:py-2 md:py-4'
+              },
+              tbody: {
+                base: 'divide-y divide-gray-600'
+              },
+              tr: {
+                base: 'hover:bg-gray-600 transition-colors'
+              }
+            }"
+      />
+    </div>
 
-      <!-- Покращена пагінація -->
-      <div class="flex justify-center mt-6 space-x-2">
-        <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="products.length"
-            @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
-            class="bg-gray-600 text-white p-3 rounded-lg"
-        />
-      </div>
+    <div class="flex justify-center mt-4 sm:mt-6 space-x-1 sm:space-x-2 overflow-x-auto">
+      <UPagination
+          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
+          :total="products.length"
+          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+          :ui="{
+              wrapper: 'flex flex-wrap justify-center gap-1 md:gap-2',
+              item: {
+                size: 'xs sm:sm md:md',
+                padding: 'px-1.5 sm:px-2.5 md:px-3.5 py-0.5 sm:py-1 md:py-1.5'
+              },
+              rounded: 'rounded-md'
+            }"
+      />
     </div>
   </div>
 </template>
